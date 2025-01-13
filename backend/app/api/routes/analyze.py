@@ -1,9 +1,9 @@
 from fastapi import APIRouter, HTTPException
-from langchain_community.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 
-from ..models import AnalyzeRequest, AnalyzeResponse
 from ...core.analyzer import TextAnalyzer
 from ...core.config import settings
+from ..models import AnalyzeRequest, AnalyzeResponse
 
 router = APIRouter()
 

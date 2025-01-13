@@ -1,3 +1,4 @@
+from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
 
 
@@ -7,8 +8,7 @@ class Settings(BaseSettings):
     MAX_TOKENS: int = 2000
     TEMPERATURE: float = 0.7
 
-    class Config:
-        env_file = ".env"
+    model_config = ConfigDict(env_file=".env")
 
 
 settings = Settings()
