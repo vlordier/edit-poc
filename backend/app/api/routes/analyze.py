@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from langchain_openai import ChatOpenAI
 
 from ...core.analyzer import TextAnalyzer
@@ -18,9 +18,7 @@ def get_llm():
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)
-async def analyze_text(request: AnalyzeRequest, llm: ChatOpenAI = None):
-    if llm is None:
-        llm = get_llm()
+async def analyze_text(request: AnalyzeRequest, llm: ChatOpenAI = Depends(get_llm)):
     try:
         if not request.text:
             raise HTTPException(status_code=400, detail="No text provided")
@@ -30,5 +28,7 @@ async def analyze_text(request: AnalyzeRequest, llm: ChatOpenAI = None):
 
         return AnalyzeResponse(suggestions=suggestions)
 
+    except HTTPException as e:
+        raise e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from None
+        raise HTTPException(status_code=500, detail=f"500: {str(e)}") from None

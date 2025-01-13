@@ -28,7 +28,7 @@ class TextSuggestion(BaseModel):
 
 
 class AnalyzeRequest(BaseModel):
-    text: str
+    text: str = Field(..., description="Text to be analyzed")
 
 
 class AnalyzeResponse(BaseModel):
