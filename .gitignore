@@ -36,6 +36,7 @@ wheels/
 out/
 build/
 .vercel
+.env.local
 .env*.local
 
 # Testing

@@ -1,107 +1,145 @@
-import React, { useState, useEffect } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import { RefreshCw, Check, X, Edit2, MessageSquare } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo, FC } from 'react';
+import { useForm } from 'react-hook-form';
+import { API_URL } from '../../constants/api';
+import AIStatus from './AIStatus';
+import TextInput from './TextInput';
+import SuggestionPanel from './SuggestionPanel';
+import SuggestionsList from './SuggestionsList';
+import { CardDescription, CardTitle } from "@/components/ui/card";
+import Button from "@/components/ui/button";
+import Textarea from "@/components/ui/textarea";
+import Input from "@/components/ui/input";
+import Select, { SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { type Suggestion, IMPROVEMENT_TYPES } from '@/types/suggestions';
 
-// Types of improvements that the LLM can suggest
-const IMPROVEMENT_TYPES = {
-  CLARITY: 'Clarity',
-  GRAMMAR: 'Grammar',
-  STYLE: 'Style',
-  TECHNICAL: 'Technical Accuracy',
-  CONSISTENCY: 'Consistency'
-};
 
-const TextEditor = () => {
-  const [text, setText] = useState('');
-  const [suggestions, setSuggestions] = useState([]);
-  const [loading, setLoading] = useState(false);
+interface FormData {
+  text: string;
+}
 
-  // Function to request suggestions from LangGraph
-  const generateSuggestions = async () => {
-    setLoading(true);
+const TextEditor: FC = () => {
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [isAIAvailable, setIsAIAvailable] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [selectedSuggestion, setSelectedSuggestion] = useState<Suggestion | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const { handleSubmit, watch } = useForm<FormData>({
+    defaultValues: { text: '' }
+  });
+
+  const currentText = watch('text');
+
+  // Improved error handling in useEffect
+  useEffect(() => {
+    let isSubscribed = true;
+
+    const checkAiAvailability = async () => {
+      try {
+        setError(null);
+        const response = await fetch(API_URL, { 
+          method: 'HEAD',
+          signal: AbortSignal.timeout(5000) // 5s timeout
+        });
+        
+        if (isSubscribed) {
+          setIsAIAvailable(response.ok);
+        }
+      } catch {
+        if (isSubscribed) {
+          setIsAIAvailable(false);
+          setError(error instanceof Error ? error.message : 'Failed to connect to AI service');
+        }
+      } finally {
+        if (isSubscribed) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    checkAiAvailability();
+    const intervalId = setInterval(checkAiAvailability, 60000);
+
+    return () => {
+      isSubscribed = false;
+      clearInterval(intervalId);
+    };
+  }, [error]);
+
+  const generateSuggestions = useCallback(async (data: FormData) => {
+    if (!data.text.trim()) return;
+    
+    setIsLoading(true);
     try {
-      const response = await fetch('/api/analyze', {
+      const response = await fetch(`${API_URL}/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text })
+        body: JSON.stringify({ text: data.text }),
       });
-      const data = await response.json();
-      setSuggestions(data.suggestions);
+      
+      if (!response.ok) throw new Error('Failed to generate suggestions');
+      
+      const responseData = await response.json();
+      const { suggestions: newSuggestions } = responseData;
+      setSuggestions(newSuggestions || []);
     } catch (error) {
       console.error('Error generating suggestions:', error);
+      setIsAIAvailable(false);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
-  };
+  }, []);
+
+  // Handle click on highlighted text to select a suggestion
+  const handleHighlightClick = useCallback((suggestion: Suggestion): void => {
+    setSelectedSuggestion(suggestion);
+  }, []);
+
+  // Update text with the selected suggestion
+  const handleUpdateText = useCallback((): void => {
+    if (selectedSuggestion) {
+      setSuggestions(suggestions.filter(s => s.id !== selectedSuggestion.id));
+      setSelectedSuggestion(null);
+    }
+  }, [selectedSuggestion, suggestions]);
+
+  // Memoize highlighted text to improve performance
+  const highlightedText = useMemo(() => {
+    return suggestions.map(suggestion => (
+      <button
+        key={suggestion.id}
+        onClick={() => handleHighlightClick(suggestion)}
+        className="highlighted-text focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-300"
+        aria-label={`Suggestion: ${suggestion.rationale}`}
+        role="button"
+      >
+        {currentText.substring(suggestion.span[0], suggestion.span[1])}
+      </button>
+    ));
+  }, [suggestions, currentText, handleHighlightClick]);
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Document Editor</CardTitle>
-          <CardDescription>
-            Edit your text and receive AI-powered suggestions
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Enter your text here..."
-            className="min-h-[200px]"
-          />
-        </CardContent>
-        <CardFooter>
-          <Button
-            onClick={generateSuggestions}
-            disabled={loading || !text}
-            className="ml-auto"
-          >
-            {loading ? (
-              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <MessageSquare className="mr-2 h-4 w-4" />
-            )}
-            Generate Suggestions
-          </Button>
-        </CardFooter>
-      </Card>
-
+    <main className="max-w-6xl mx-auto p-6 space-y-6 bg-white shadow-lg rounded-lg">
+      <header className="text-center mb-4">
+        <CardTitle className="text-2xl font-bold">Document Editor</CardTitle>
+        <CardDescription className="text-gray-600">
+          Edit your text and receive AI-powered suggestions
+        </CardDescription>
+      </header>
+      <AIStatus aiAvailable={isAIAvailable} />
+      <form onSubmit={handleSubmit(generateSuggestions)}>
+        <TextInput text={currentText} setText={(newText) => setText(newText)} />
+        <div className="my-4 p-4 bg-gray-100 rounded-lg">{highlightedText}</div>
+        <SuggestionPanel loading={isLoading} text={currentText} generateSuggestions={generateSuggestions} />
+      </form>
       <SuggestionsList
         suggestions={suggestions}
         onAccept={(id, suggestionIndex) => {
           // Apply the selected suggestion
           const suggestion = suggestions.find(s => s.id === id);
           if (suggestion) {
-            const before = text.substring(0, suggestion.span[0]);
-            const after = text.substring(suggestion.span[1]);
+            const before = currentText.substring(0, suggestion.span[0]);
+            const after = currentText.substring(suggestion.span[1]);
             setText(before + suggestion.improvements[suggestionIndex].text + after);
             // Remove the applied suggestion
             setSuggestions(suggestions.filter(s => s.id !== id));
@@ -116,143 +154,69 @@ const TextEditor = () => {
           ));
         }}
       />
-    </div>
-  );
-};
-
-const SuggestionsList = ({ suggestions, onAccept, onDelete, onEdit }) => {
-  return (
-    <div className="space-y-4">
-      {suggestions.map((suggestion) => (
-        <SuggestionCard
-          key={suggestion.id}
-          suggestion={suggestion}
-          onAccept={onAccept}
-          onDelete={onDelete}
-          onEdit={onEdit}
-        />
-      ))}
-    </div>
-  );
-};
-
-const SuggestionCard = ({ suggestion, onAccept, onDelete, onEdit }) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedSuggestion, setEditedSuggestion] = useState(suggestion);
-
-  const handleSave = () => {
-    onEdit(suggestion.id, editedSuggestion);
-    setIsEditing(false);
-  };
-
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <Badge variant={suggestion.type.toLowerCase()}>
-            {IMPROVEMENT_TYPES[suggestion.type]}
-          </Badge>
-          <div className="flex gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsEditing(!isEditing)}
+    {selectedSuggestion && (
+        <div className="side-panel">
+          <h2>Edit Suggestion</h2>
+          <div>
+            <label>Type</label>
+            <Select
+              value={selectedSuggestion.type}
+              onValueChange={(value) =>
+                setSelectedSuggestion({ ...selectedSuggestion, type: value })
+              }
             >
-              <Edit2 className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => onDelete(suggestion.id)}
-            >
-              <X className="h-4 w-4" />
-            </Button>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(IMPROVEMENT_TYPES).map(([key, value]) => (
+                  <SelectItem key={key} value={key}>
+                    {value}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {isEditing ? (
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium">Type</label>
-              <Select
-                value={editedSuggestion.type}
-                onValueChange={(value) => 
-                  setEditedSuggestion({...editedSuggestion, type: value})
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(IMPROVEMENT_TYPES).map(([key, value]) => (
-                    <SelectItem key={key} value={key}>
-                      {value}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-sm font-medium">Rationale</label>
-              <Textarea
-                value={editedSuggestion.rationale}
-                onChange={(e) => 
-                  setEditedSuggestion({
-                    ...editedSuggestion,
-                    rationale: e.target.value
-                  })
-                }
+          <div>
+            <label>Rationale</label>
+            <Textarea
+              value={selectedSuggestion.rationale}
+              onChange={(e) =>
+                setSelectedSuggestion({
+                  ...selectedSuggestion,
+                  rationale: e.target.value,
+                })
+              }
+              id="text-editor"
+              name="text-editor"
+            />
+          </div>
+          <div>
+            <label>Improvements</label>
+            {selectedSuggestion.improvements.map((improvement, index) => (
+              <Input
+                key={index}
+                value={improvement.text}
+                onChange={(e) => {
+                  const newImprovements = [...selectedSuggestion.improvements];
+                  newImprovements[index] = {
+                    ...improvement,
+                    text: e.target.value,
+                  };
+                  setSelectedSuggestion({
+                    ...selectedSuggestion,
+                    improvements: newImprovements,
+                  });
+                }}
+                id={`improvement-${index}`}
+                name={`improvement-${index}`}
               />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Improvements</label>
-              {editedSuggestion.improvements.map((improvement, index) => (
-                <div key={index} className="mt-2">
-                  <Input
-                    value={improvement.text}
-                    onChange={(e) => {
-                      const newImprovements = [...editedSuggestion.improvements];
-                      newImprovements[index] = {
-                        ...improvement,
-                        text: e.target.value
-                      };
-                      setEditedSuggestion({
-                        ...editedSuggestion,
-                        improvements: newImprovements
-                      });
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-            <Button onClick={handleSave}>Save Changes</Button>
+            ))}
           </div>
-        ) : (
-          <>
-            <p className="text-sm mb-4">{suggestion.rationale}</p>
-            <div className="space-y-2">
-              {suggestion.improvements.map((improvement, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded"
-                >
-                  <p className="text-sm">{improvement.text}</p>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onAccept(suggestion.id, index)}
-                  >
-                    <Check className="h-4 w-4 mr-1" />
-                    Apply
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-      </CardContent>
-    </Card>
+          <Button onClick={handleUpdateText}>Update</Button>
+        </div>
+      )}
+    </main>
   );
 };
 

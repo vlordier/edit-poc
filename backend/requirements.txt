@@ -1,4 +1,4 @@
-fastapi
+fastapi[all]
 uvicorn
 langchain
 langchain-community>=0.0.39

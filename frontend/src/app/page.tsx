@@ -1,64 +1,91 @@
 "use client";
 
-import { useState } from "react";
-
-const HighlightedText = ({ text, highlights }) => {
-  const parts = [];
-  let lastIndex = 0;
-
-  highlights.forEach(({ start, end, color, critique, suggestion }, index) => {
-    if (lastIndex < start) {
-      parts.push(<span key={`text-${index}`}>{text.slice(lastIndex, start)}</span>);
-    }
-    parts.push(
-      <span key={`highlight-${index}`} style={{ backgroundColor: color }}>
-        {text.slice(start, end)}
-      </span>,
-      <div className="ml-4 mt-2">
-        <p className="text-sm text-gray-700"><strong>Critique:</strong> {critique}</p>
-        <p className="text-sm text-gray-700"><strong>Suggestion:</strong> {suggestion}</p>
-      </div>
-    );
-    lastIndex = end;
-  });
-
-  if (lastIndex < text.length) {
-    parts.push(<span key="text-end">{text.slice(lastIndex)}</span>);
-  }
-
-  return <>{parts}</>;
-};
+import { useState, useEffect, useCallback } from "react";
+import { API_URL } from "../constants/api";
+import { type Highlight } from "../types/highlights";
+import { HighlightedText } from "../components/HighlightedText";
+import { TextEditor } from "../components/TextEditor";
+import { AnalysisControls } from "../components/AnalysisControls";
+import { FeedbackPanel } from "../components/FeedbackPanel";
 
 export default function Home() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-
+  const [error, setError] = useState<Error | null>(null);
   const [text, setText] = useState("");
-  const [highlights, setHighlights] = useState([]);
+  const [highlights, setHighlights] = useState<Highlight[]>([]);
+  const [selectedHighlight, setSelectedHighlight] = useState<number | null>(null);
 
-  const handleAnalyze = async () => {
-    setLoading(true);
-    setError("");
-    setMessage("");
-    try {
-      // Simulate an API call
-      const response = await fetch("/api/analyze", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ text }),
-      });
-      const data = await response.json();
-      setHighlights(data.highlights);
-      setMessage("Text analysis completed successfully!");
-    } catch (err) {
-      setError("Failed to analyze text. Please check your input and try again.");
-    } finally {
-      setLoading(false);
+const handleAnalyze = useCallback(async () => {
+  if (!text.trim()) {
+    setError(new Error("Please enter some text to analyze"));
+    return;
+  }
+
+  setLoading(true);
+  setError(null);
+  setMessage("");
+
+  try {
+    const response = await fetch(`${API_URL}/api/analyze`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ text }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
     }
-  };
+
+    const data = await response.json();
+    const formattedHighlights = data.suggestions.map((suggestion) => ({
+      start: suggestion.span[0],
+      end: suggestion.span[1],
+      color: "yellow", // You can customize the color based on suggestion type
+      critique: suggestion.rationale,
+      suggestion: suggestion.improvements[0].text, // Assuming you want the first improvement
+    }));
+    setHighlights(formattedHighlights);
+    setMessage("Text analysis completed successfully!");
+  } catch (err) {
+    setError(err instanceof Error ? err : new Error("Failed to analyze text"));
+  } finally {
+    setLoading(false);
+  }
+}, [text]);
+
+  const handleAccept = useCallback(() => {
+    if (selectedHighlight !== null) {
+      const { start, end, suggestion } = highlights[selectedHighlight];
+      const newText = text.slice(0, start) + suggestion + text.slice(end);
+      setText(newText);
+      setHighlights(highlights.filter((_, index) => index !== selectedHighlight));
+    }
+    // Logic to accept the suggestion
+    setSelectedHighlight(null);
+  }, [selectedHighlight, highlights, text]);
+
+  const handleReject = useCallback(() => {
+    if (selectedHighlight !== null) {
+      setHighlights(highlights.filter((_, index) => index !== selectedHighlight));
+    }
+    // Logic to reject the suggestion
+    setSelectedHighlight(null);
+  }, [selectedHighlight, highlights]);
+
+  const handleHighlightSelect = useCallback((index: number) => {
+    setSelectedHighlight(index === selectedHighlight ? null : index);
+  }, [selectedHighlight]);
+
+  useEffect(() => {
+    if (error) {
+      console.error("Error:", error.message);
+    }
+  }, [error]);
+
   return (
     <main className="flex min-h-screen flex-col items-center p-8 bg-background">
       <div className="w-full max-w-6xl space-y-8">
@@ -71,30 +98,53 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="bg-white shadow rounded p-6">
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              className="min-h-[500px] text-lg w-full"
-              placeholder="Paste or type your text here..."
-            ></textarea>
-        </div>
+        <TextEditor 
+          text={text}
+          setText={setText}
+          loading={loading}
+        />
 
         <div className="bg-white shadow rounded p-6">
-            <HighlightedText text={text} highlights={highlights} />
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+            </div>
+          ) : (
+            <HighlightedText 
+              text={text} 
+              highlights={highlights}
+              selectedHighlight={selectedHighlight}
+              onHighlightSelect={handleHighlightSelect}
+            />
+          )}
         </div>
 
-        <div className="flex justify-between mt-4">
-          <button className="text-lg p-2 bg-blue-500 text-white rounded" onClick={() => setText("")} disabled={loading}>
-            Clear
-          </button>
-          <button className="text-lg p-2 bg-blue-500 text-white rounded" onClick={handleAnalyze} disabled={loading}>
-            {loading ? "Analyzing..." : "Analyze Text"}
-          </button>
-        </div>
-        {message && <p className="text-green-500 mt-4">{message}</p>}
-        {error && <p className="text-red-500 mt-4">{error}</p>}
+        <AnalysisControls
+          loading={loading}
+          onClear={() => setText("")}
+          onAnalyze={handleAnalyze}
+        />
+
+        {message && (
+          <div role="alert" className="text-green-500 mt-4 p-3 bg-green-50 rounded">
+            {message}
+          </div>
+        )}
+        {error && (
+          <div role="alert" className="text-red-500 mt-4 p-3 bg-red-50 rounded">
+            {error.message}
+          </div>
+        )}
       </div>
+      
+      {selectedHighlight !== null && (
+        <FeedbackPanel
+          highlight={highlights[selectedHighlight]}
+          onAccept={handleAccept}
+          onReject={handleReject}
+          loading={loading}
+        />
+      )}
     </main>
   );
 }
