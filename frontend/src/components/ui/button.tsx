@@ -6,12 +6,6 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   loading?: boolean;
 }
 
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary';
-  size?: 'small' | 'medium' | 'large';
-  loading?: boolean;
-}
-
 const Button: FC<ButtonProps> = ({ children, className, variant = 'primary', size = 'medium', loading = false, ...props }) => {
   const baseClasses = 'rounded transition-colors focus:outline-none';
   const variantClasses = variant === 'primary' ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-gray-200 text-gray-800 hover:bg-gray-300';
@@ -22,10 +16,17 @@ const Button: FC<ButtonProps> = ({ children, className, variant = 'primary', siz
       {...props}
       className={`${baseClasses} ${variantClasses} ${sizeClasses} ${className || ''}`}
       disabled={loading || props.disabled}
+      aria-busy={loading}
+      aria-disabled={loading || props.disabled}
     >
-      {loading ? 'Loading...' : children}
+      {loading ? (
+        <>
+          <span className="sr-only">Loading</span>
+          <span aria-hidden="true">Loading...</span>
+        </>
+      ) : children}
     </button>
   );
 };
 
-export default Button;
+export { Button };

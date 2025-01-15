@@ -1,5 +1,10 @@
 import React, { memo } from 'react';
 
+export enum AIStatusType {
+  ENABLED = 'enabled',
+  DISABLED = 'disabled'
+}
+
 type AIStatusProps = {
   aiAvailable: boolean;
   className?: string;
@@ -10,7 +15,7 @@ type AIStatusProps = {
  * @param {AIStatusProps} props - Component properties
  * @returns {JSX.Element} Status indicator with icon and text
  */
-const AIStatus: React.FC<AIStatusProps> = memo(({ aiAvailable, className = '' }) => (
+export const AIStatus: React.FC<AIStatusProps> = memo(({ aiAvailable, className = '' }) => (
   <header 
     className={`flex items-center justify-center mb-4 ${className}`}
     role="status"
@@ -23,7 +28,6 @@ const AIStatus: React.FC<AIStatusProps> = memo(({ aiAvailable, className = '' })
         data-testid="ai-status-enabled"
       >
         <span className="sr-only">AI is </span>
-        {/* Using semantic checkmark character instead of emoji */}
         <span aria-hidden="true">✓</span>
         AI enabled
       </span>
@@ -33,7 +37,6 @@ const AIStatus: React.FC<AIStatusProps> = memo(({ aiAvailable, className = '' })
         data-testid="ai-status-disabled"
       >
         <span className="sr-only">AI is </span>
-        {/* Using semantic X character instead of emoji */}
         <span aria-hidden="true">×</span>
         AI not available
       </span>
@@ -42,5 +45,3 @@ const AIStatus: React.FC<AIStatusProps> = memo(({ aiAvailable, className = '' })
 ));
 
 AIStatus.displayName = 'AIStatus';
-
-export default AIStatus;

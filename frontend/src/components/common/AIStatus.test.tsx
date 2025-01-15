@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import AIStatus from './AIStatus';
+import { AIStatus } from './AIStatus';
 
 test('renders AI enabled status', () => {
   render(<AIStatus aiAvailable={true} />);

@@ -9,23 +9,18 @@
   --primary-foreground: 210 40% 98%;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+@layer base {
+  body {
+    @apply m-0 p-0 box-border font-sans text-black bg-white;
   }
 }
 
-body {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-  font-family: 'Arial', sans-serif;
-  color: #000; /* Set text to black */
-  background: hsl(var(--background));
-}
+@layer components {
+  .highlighted-text {
+    @apply bg-yellow-200 cursor-pointer inline-block mx-0.5 transition-colors hover:bg-yellow-300;
+  }
 
-/* Add smooth transitions */
-* {
-  transition: background-color 0.2s, border-color 0.2s, opacity 0.2s;
+  .side-panel {
+    @apply fixed right-0 top-0 w-[350px] h-full bg-white text-gray-800 p-5 shadow-lg overflow-y-auto border-l border-gray-200;
+  }
 }

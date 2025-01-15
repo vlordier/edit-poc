@@ -1,4 +1,21 @@
-export const trackEvent = (eventName: string, properties?: Record<string, unknown>) => {
+export type EventName = 
+  | 'analyze_shortcut_used'
+  | 'clear_shortcut_used'
+  | 'suggestion_action'
+  | 'error_occurred';
+
+export type SuggestionAction = 'accept' | 'reject' | 'edit';
+
+export type EventProperties = {
+  action?: 'accept' | 'reject' | 'edit';
+  type?: string;
+  error?: string;
+  stack?: string;
+  timestamp?: string;
+  metadata?: Record<string, unknown>;
+};
+
+export const trackEvent = (eventName: EventName, properties?: EventProperties) => {
   if (process.env.NODE_ENV === 'production') {
     try {
       // Implement your analytics tracking here

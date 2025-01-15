@@ -1,8 +1,22 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
-export function useUndoRedo<T>(initialState: T) {
+export function useUndoRedo<T>(initialState: T): {
+  state: T;
+  setState: (newState: T) => void;
+  undo: () => void;
+  redo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
+} {
   const [states, setStates] = useState<T[]>([initialState]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   const setState = useCallback((newState: T) => {
     setStates(prev => [...prev.slice(0, currentIndex + 1), newState]);

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { API_URL } from "../constants/api";
 import { type Highlight } from "../types/highlights";
 import { HighlightedText } from "../components/HighlightedText";
-import { TextEditor } from "../components/TextEditor";
+import { TextEditor } from "../components/Editor/TextEditor";
 import { AnalysisControls } from "../components/AnalysisControls";
 import { FeedbackPanel } from "../components/FeedbackPanel";
 
@@ -17,23 +17,40 @@ export default function Home() {
   const [selectedHighlight, setSelectedHighlight] = useState<number | null>(null);
 
 const handleAnalyze = useCallback(async () => {
-  if (!text.trim()) {
-    setError(new Error("Please enter some text to analyze"));
-    return;
-  }
-
-  setLoading(true);
-  setError(null);
-  setMessage("");
-
   try {
-    const response = await fetch(`${API_URL}/api/analyze`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ text }),
-    });
+    // Input validation
+    if (!text) {
+      throw new Error("Please enter some text to analyze");
+    }
+
+    if (!text.trim()) {
+      throw new Error("Please enter some actual text, not just whitespace");
+    }
+
+    if (text.length < 10) {
+      throw new Error("Please enter at least 10 characters");
+    }
+
+    if (text.length > 5000) {
+      throw new Error("Text is too long. Maximum length is 5000 characters");
+    }
+
+    setLoading(true);
+    setError(null);
+    setMessage("");
+
+    let response;
+    try {
+      response = await fetch(`${API_URL}/api/analyze`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text }),
+      });
+    } catch (networkError) {
+      throw new Error("Network error: Failed to reach the server. Please check your connection.");
+    }
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
@@ -82,9 +99,36 @@ const handleAnalyze = useCallback(async () => {
 
   useEffect(() => {
     if (error) {
-      console.error("Error:", error.message);
+      const errorDetails = {
+        message: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString(),
+        textLength: text.length,
+        type: error instanceof Error ? error.name : 'Unknown',
+        stack: error instanceof Error ? error.stack : undefined
+      };
+      
+      // Log to console in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error occurred:', {
+          message: errorDetails.message,
+          timestamp: errorDetails.timestamp,
+          textLength: errorDetails.textLength,
+          type: errorDetails.type
+        });
+      }
+      
+      // Track error event
+      import('../utils/analytics').then(({ trackEvent }) => {
+        try {
+          trackEvent('error_occurred', errorDetails);
+        } catch (trackingError) {
+          console.error('Failed to track error event:', trackingError);
+        }
+      }).catch((importError) => {
+        console.error('Failed to import analytics:', importError);
+      });
     }
-  }, [error]);
+  }, [error, text]);
 
   return (
     <main className="flex min-h-screen flex-col items-center p-8 bg-background">

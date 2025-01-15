@@ -1,8 +1,8 @@
 import React, { useState, memo, useCallback, KeyboardEvent } from 'react';
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
-import Button from "@/components/ui/button";
-import Input from "@/components/ui/input";
-import Select, { SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import Textarea from "@/components/ui/textarea";
 import { Check, Edit2, X } from 'lucide-react';
 import { type Suggestion, IMPROVEMENT_TYPES } from '@/types/suggestions';
@@ -18,9 +18,26 @@ const SuggestionCard: React.FC<SuggestionCardProps> = memo(({ suggestion, onAcce
   const [isEditing, setIsEditing] = useState(false);
   const [editedSuggestion, setEditedSuggestion] = useState<Suggestion>({ ...suggestion });
 
-  const handleSave = useCallback(() => {
-    onEdit(suggestion.id, editedSuggestion);
-    setIsEditing(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const handleSave = useCallback(async () => {
+    if (!editedSuggestion.rationale.trim() || !editedSuggestion.improvements.length) {
+      return;
+    }
+    
+    setIsSaving(true);
+    try {
+      await onEdit(suggestion.id, editedSuggestion);
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Failed to save suggestion:', error);
+      // Show error state
+      setError('Failed to save changes. Please try again.');
+      setTimeout(() => setError(null), 3000);
+    } finally {
+      setIsSaving(false);
+    }
   }, [editedSuggestion, onEdit, suggestion.id]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -36,6 +53,8 @@ const SuggestionCard: React.FC<SuggestionCardProps> = memo(({ suggestion, onAcce
       aria-label={`Suggestion: ${IMPROVEMENT_TYPES[suggestion.type]}`}
       tabIndex={0}
       onKeyDown={handleKeyDown}
+      aria-expanded={isEditing}
+      aria-controls={`suggestion-content-${suggestion.id}`}
     >
       <CardHeader>
         <div className="flex items-center justify-between">
@@ -55,15 +74,38 @@ const SuggestionCard: React.FC<SuggestionCardProps> = memo(({ suggestion, onAcce
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => onDelete(suggestion.id)}
+              onClick={async () => {
+                setIsDeleting(true);
+                try {
+                  await onDelete(suggestion.id);
+                } catch (error) {
+                  setError('Failed to delete suggestion');
+                  setTimeout(() => setError(null), 3000);
+                } finally {
+                  setIsDeleting(false);
+                }
+              }}
+              disabled={isDeleting}
               aria-label="Delete suggestion"
             >
-              <X className="h-4 w-4" />
+              {isDeleting ? (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600" />
+              ) : (
+                <X className="h-4 w-4" />
+              )}
             </Button>
           </div>
         </div>
       </CardHeader>
       <CardContent>
+        {error && (
+          <div 
+            className="mb-4 p-2 text-sm text-red-600 bg-red-50 rounded"
+            role="alert"
+          >
+            {error}
+          </div>
+        )}
         {isEditing ? (
           <div className="space-y-4">
             <div>
@@ -121,7 +163,12 @@ const SuggestionCard: React.FC<SuggestionCardProps> = memo(({ suggestion, onAcce
                 </div>
               ))}
             </div>
-            <Button onClick={handleSave}>Save Changes</Button>
+            <Button 
+              onClick={handleSave}
+              disabled={isSaving}
+            >
+              {isSaving ? 'Saving...' : 'Save Changes'}
+            </Button>
           </div>
         ) : (
           <>

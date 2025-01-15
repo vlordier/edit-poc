@@ -17,13 +17,13 @@ class TextSuggestion(BaseModel):
         description="Type of improvement needed: STYLE, CONTENT, TERMINOLOGY, CLARITY, REGULATORY, or CONSISTENCY"
     )
     span: tuple[int, int] = Field(
-        description="Start and end indices of the text to improve"
+        description="Exact text span to which this suggestion applies, full text if not provided"
     )
     rationale: str = Field(
         description="Detailed explanation of why this improvement is needed"
     )
     improvements: List[Improvement] = Field(
-        description="List of suggested improvements"
+        description="List of suggested, specific improvements"
     )
 
 
